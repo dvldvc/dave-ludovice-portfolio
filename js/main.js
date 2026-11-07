@@ -391,8 +391,47 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     if (form) {
+        const emailField = form.querySelector('[name="email"]');
+
+        // Clear any custom error once the visitor edits the address.
+        emailField.addEventListener('input', function () {
+            emailField.setCustomValidity('');
+            if (formStatus.textContent.startsWith('Please enter a complete email address')) {
+                formStatus.textContent = '';
+            }
+        });
+
         form.addEventListener('submit', async function (event) {
             event.preventDefault();
+
+            const nameField = form.querySelector('[name="name"]');
+            const messageField = form.querySelector('[name="message"]');
+            const name = nameField.value.trim();
+            const email = emailField.value.trim();
+            const message = messageField.value.trim();
+
+            // Browser type="email" can accept incomplete domains like name@gmail.
+            // Require a full domain and TLD before contacting Web3Forms.
+            const completeEmailPattern = /^[^\s@]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,63}$/;
+
+            if (!name) {
+                formStatus.textContent = 'Please enter your name.';
+                nameField.focus();
+                return;
+            }
+
+            if (!completeEmailPattern.test(email) || !emailField.checkValidity()) {
+                formStatus.textContent = 'Please enter a complete email address (e.g. name@gmail.com).';
+                emailField.setCustomValidity(formStatus.textContent);
+                emailField.reportValidity();
+                return;
+            }
+
+            if (!message) {
+                formStatus.textContent = 'Please write your message.';
+                messageField.focus();
+                return;
+            }
 
             const accessKeyInput = form.querySelector('[name="access_key"]');
             const accessKey = accessKeyInput ? accessKeyInput.value.trim() : '';
@@ -406,6 +445,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
             try {
                 const formData = new FormData(form);
+                formData.set('name', name);
+                formData.set('email', email);
+                formData.set('message', message);
                 const response = await fetch(form.action, {
                     method: 'POST',
                     body: formData
