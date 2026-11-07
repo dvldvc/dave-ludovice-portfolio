@@ -1,0 +1,79 @@
+name: Import portfolio from ZIP
+
+on:
+  push:
+    paths:
+      - '*.zip'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import-portfolio:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Extract the portfolio archive safely
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import zipfile
+
+          root = Path.cwd()
+          archives = sorted(root.glob("PORTFOLIO-VERCEL-READY-HTML-AND-PHP*.zip"))
+          if not archives:
+              raise SystemExit("Upload the supplied Vercel-ready portfolio ZIP to the repository root.")
+          if len(archives) != 1:
+              raise SystemExit("Found multiple matching ZIPs. Keep only the ZIP you want to import.")
+          archive = archives[0]
+          with zipfile.ZipFile(archive) as z:
+              bad = z.testzip()
+              if bad:
+                  raise SystemExit(f"Corrupted ZIP entry: {bad}")
+              written = 0
+              for member in z.infolist():
+                  if member.is_dir():
+                      continue
+                  name = member.filename.replace("\\", "/")
+                  parts = Path(name).parts
+                  if not parts or parts[0] != "student-portfolio":
+                      raise SystemExit(f"Unexpected archive path: {name}")
+                  rel = Path(*parts[1:])
+                  if not rel.parts or rel.is_absolute() or ".." in rel.parts:
+                      raise SystemExit(f"Unsafe archive path: {name}")
+                  if rel.name in {".git", ".github"} or ".git" in rel.parts or ".github" in rel.parts:
+                      raise SystemExit(f"Disallowed archive path: {name}")
+                  if rel.as_posix() == "README.md":
+                      continue
+                  target = root / rel
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  with z.open(member) as src, target.open("wb") as dst:
+                      while True:
+                          chunk = src.read(1024 * 1024)
+                          if not chunk:
+                              break
+                          dst.write(chunk)
+                  written += 1
+          if not (root / "public" / "index.html").is_file():
+              raise SystemExit("The expected public/index.html was not found.")
+          print(f"Extracted {written} portfolio files from {archive.name}")
+          PY
+
+      - name: Commit site files and remove archive
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git rm -f --ignore-unmatch -- PORTFOLIO-VERCEL-READY-HTML-AND-PHP*.zip
+          if ! git diff --cached --quiet; then
+            git commit -m "Import responsive portfolio and static Vercel site"
+            git push
+          fi
