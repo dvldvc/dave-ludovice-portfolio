@@ -31,7 +31,7 @@
 
         <label>
             <span>Email</span>
-            <input type="email" name="email" placeholder="yourname@email.com" required autocomplete="email">
+            <input type="email" name="email" placeholder="yourname@email.com" required autocomplete="email" inputmode="email" pattern="[^@\s]+@[^@\s]+\.[A-Za-z]{2,}" title="Enter a complete email address (e.g. name@gmail.com)">
         </label>
 
         <label>
